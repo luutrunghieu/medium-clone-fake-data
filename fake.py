@@ -25,10 +25,11 @@ def fake_data():
     written_stories = []
     followers = []
     following = []
+    google_id = fake.sha256(raw_output=False)
+    access_token = fake.sha256(raw_output=False)
     insertedUser = db.users.insert_one(
-        {"fullname": fullname, "avatar": avatar, "bio": bio, "written_stories":written_stories, "followers": followers, "following": following}
+        {"fullname": fullname, "avatar": avatar, "bio": bio, "written_stories":written_stories, "followers": followers, "following": following, "google_provider":{"id": google_id, "token":access_token}}
     )
-    
     user_ids.append(str(insertedUser.inserted_id))
 
   # insert stories
