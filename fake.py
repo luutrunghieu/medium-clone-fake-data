@@ -1,21 +1,29 @@
 from faker import Faker
 from pymongo import MongoClient
 from random import randint, sample
-import datetime
+from datetime import datetime, timedelta
 from bson.objectid import ObjectId
+import sys
 
-client = MongoClient("mongodb://localhost:27017/")
-db = client['medium-clone']
+env = sys.argv[1]
+if env == 'production':
+  storyClient = MongoClient("mongodb://35.240.184.156:27017/")
+  userClient = MongoClient("mongodb://35.221.160.168:27017/")  
+else:
+  storyClient = MongoClient("mongodb://localhost:27018/")
+  userClient = MongoClient("mongodb://localhost:27017/")
+
 fake = Faker()
-
+storyDb = storyClient['medium-clone']
+userDb = userClient['medium-clone']
 
 def fake_data():
   user_ids = []
   story_ids = []
-  topics = ['design','marketing','languages','tech','science','culture','economic']
+  topics = ['design','marketing','languages','technology','science','culture','economic']
   features = [True, False]
-  db.users.delete_many({})
-  db.stories.delete_many({})
+  userDb.users.delete_many({})
+  storyDb.stories.delete_many({})
 
   # insert user
   for x in range(20):
@@ -27,7 +35,7 @@ def fake_data():
     following = []
     google_id = fake.sha256(raw_output=False)
     access_token = fake.sha256(raw_output=False)
-    insertedUser = db.users.insert_one(
+    insertedUser = userDb.users.insert_one(
         {"fullname": fullname, "avatar": avatar, "bio": bio, "written_stories":written_stories, "followers": followers, "following": following, "google_provider":{"id": google_id, "token":access_token}}
     )
     user_ids.append(str(insertedUser.inserted_id))
@@ -48,26 +56,34 @@ def fake_data():
       day = randint(1,28)
     else:
       day = randint(1,30)
-    created_at = datetime.datetime(year,month,day)
+    created_at = datetime(year,month,day)
     updated_at = created_at
     content = fake.text(max_nb_chars=1000, ext_word_list=None)
-    insertedStory = db.stories.insert_one(
-        {"title": title, "content": content, "topic": topic, "featured_image": featured_image, "author_id": author_id,"read_time":read_time, "featured":featured, "popular":popular, "reacted_user":reacted_user, "created_at":created_at,"updated_at":updated_at}
+    number_of_comments = randint(0,5)
+    comments = []
+    for y in range(number_of_comments):
+      comment = {}
+      comment['content'] = fake.sentence(nb_words=10)
+      comment['author_id'] = sample(user_ids, 1)[0]
+      comment['created_at'] = created_at + timedelta(days=1)
+      comments.append(comment)
+    insertedStory = storyDb.stories.insert_one(
+        {"title": title, "content": content, "topics": topic, "featured_image": featured_image, "author_id": author_id,"read_time":read_time, "featured":featured, "popular":popular, "reacted_user":reacted_user, "created_at":created_at,"updated_at":updated_at, "comments":comments}
     )
-    author = db.users.find_one({"_id":ObjectId(author_id)})
+    author = userDb.users.find_one({"_id":ObjectId(author_id)})
     author["written_stories"].append(insertedStory.inserted_id)
-    db.users.update({"_id":ObjectId(author_id)},author)
+    userDb.users.update({"_id":ObjectId(author_id)},author)
   
   #update follwers, following
   for user_id in user_ids:
     following_ids = sample(user_ids, randint(1,20))
-    follower = db.users.find_one({"_id":ObjectId(user_id)})
+    follower = userDb.users.find_one({"_id":ObjectId(user_id)})
     follower['following'] = following_ids
-    db.users.update({"_id":ObjectId(user_id)},follower)
+    userDb.users.update({"_id":ObjectId(user_id)},follower)
     for following_id in following_ids:
-      followee = db.users.find_one({"_id":ObjectId(following_id)})
+      followee = userDb.users.find_one({"_id":ObjectId(following_id)})
       followee['followers'].append(user_id)
-      db.users.update({"_id":ObjectId(following_id)},followee)
+      userDb.users.update({"_id":ObjectId(following_id)},followee)
 if __name__ == "__main__":
   fake_data()
 
